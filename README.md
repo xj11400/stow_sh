@@ -1,0 +1,2 @@
+#  stow in shell script
+
