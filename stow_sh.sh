@@ -1,5 +1,10 @@
 #!/bin/bash
 
+#TODO
+# - echo -> logger
+# - log level -> error(release)
+# - log level -> debug(dev)
+
 # fork: https://github.com/bashdot/bashdot
 
 VERSION=4.1.7
@@ -18,8 +23,8 @@ STOW_NO_FOLDING=false
 
 STOW_IGNORE='^\.$|^\.\.$|^changelog|^contributing|^dockerfile|^icon|^license|^makefile|^readme|^.git'
 
-LOGGER_FMT=${LOGGER_FMT:="%Y-%m-%d"}
-LOGGER_LVL=${LOGGER_LVL:="info"}
+LOGGER_FMT=${LOGGER_FMT:="%Y/%m/%d %T"}
+LOGGER_LVL=${LOGGER_LVL:="error"}
 
 if [ -n "$BASHDOT_LOG_LEVEL" ]; then
     LOGGER_LVL=$BASHDOT_LOG_LEVEL
@@ -55,6 +60,21 @@ _help() {
     echo "     -V, --version         Show stow version number"
     echo "     -h, --help            Show this help"
     echo ""
+}
+
+## logger
+
+log() {
+    action=$1 && shift
+
+    case "$action" in
+    debug) [[ "$LOGGER_LVL" =~ debug ]] && echo "$(date "+${LOGGER_FMT}") [DEBUG] $@" 1>&2 ;;
+    info) [[ "$LOGGER_LVL" =~ debug|info ]] && echo "$(date "+${LOGGER_FMT}") [INFO ] $@" 1>&2 ;;
+    warn) [[ "$LOGGER_LVL" =~ debug|info|warn ]] && echo "$(date "+${LOGGER_FMT}") [WARN ] $@" 1>&2 ;;
+    error) [[ ! "$LOGGER_LVL" =~ none ]] && echo "$(date "+${LOGGER_FMT}") [ERROR] $@" 1>&2 ;;
+    esac
+
+    true
 }
 
 ###### verify
@@ -101,20 +121,6 @@ check_valid_profile_name() {
         echo -en "true"
     fi
 }
-## logger
-
-log() {
-    action=$1 && shift
-
-    case "$action" in
-    debug) [[ "$LOGGER_LVL" =~ debug ]] && echo "$(date "+${LOGGER_FMT}") - DEBUG - $@" 1>&2 ;;
-    info) [[ "$LOGGER_LVL" =~ debug|info ]] && echo "$(date "+${LOGGER_FMT}") - INFO - $@" 1>&2 ;;
-    warn) [[ "$LOGGER_LVL" =~ debug|info|warn ]] && echo "$(date "+${LOGGER_FMT}") - WARN - $@" 1>&2 ;;
-    error) [[ ! "$LOGGER_LVL" =~ none ]] && echo "$(date "+${LOGGER_FMT}") - ERROR - $@" 1>&2 ;;
-    esac
-
-    true
-}
 
 ####
 
@@ -139,10 +145,10 @@ _link() {
     log info "Linking '$source_file' to '$target_file'."
 
     _target_dir_name="$(dirname "$target_file")"
-    echo "target dir: $_target_dir_name"
+    log debug "target dir: $_target_dir_name"
 
     if [ ! -d "${_target_dir_name}" ]; then
-        echo "mkdir -p $_target_dir_name"
+        log debug "mkdir -p $_target_dir_name"
         mkdir -p $_target_dir_name
     fi
 
@@ -150,7 +156,7 @@ _link() {
 }
 
 _get_no_folding_list() {
-    echo "INSALL--NO--FOLDING-" >&2
+    log debug "INSALL--NO--FOLDING-"
     local profile_dir="$1"
     local _files=()
 
@@ -163,34 +169,33 @@ _get_no_folding_list() {
 
     log info "Adding dotfiles profile '$profile_dir'."
     for _f in $(find $profile_dir -type f); do
-        echo "." >&2
-        echo "[$_f]" >&2
+        log debug "."
+        log debug "[$_f]"
 
         _rel_path="${_f/$profile_dir\//}"
         if $(echo "${_rel_path}" | grep -E -i "$STOW_IGNORE" >/dev/null 2>&1); then
-            echo "--($_rel_path)" >&2
+            log debug "--($_rel_path)"
             continue
         fi
 
         _filename="${_f##*/}"
         if $(echo "${_filename}" | grep -E -i "$STOW_IGNORE" >/dev/null 2>&1); then
-            echo "---($_filename)" >&2
+            log debug "---($_filename)"
             continue
         fi
 
         _file="${_f/$profile_dir/$STOW_TARGET}"
-        echo "......................................................   $_file" >&2
+        log debug "......................................................   $_file"
 
         _files+=("${_rel_path}")
     done
 
-    echo "# ${_files[*]}" >&2
+    log debug "# ${_files[*]}"
     IFS="" echo -n "${_files[@]}"
-    # exit # .local/share/xj .local/share/tt/ttloc .local/lss/share/xj .local/lss/share/tt/ttloc .ttrc .ff/xxx
 }
 
 _get_list() {
-    echo "INSALL-----" >&2
+    log debug "INSALL-----"
     local profile_dir=$1
     local _files=()
 
@@ -203,47 +208,44 @@ _get_list() {
 
     log info "Adding dotfiles profile '$profile_dir'."
 
-    # _IGNORE='^.config$|^.cache$|^.local$|^.local/share$|^.local/state$'
-    # _IGNORE="$_IGNORE|^$profile_dir$"
-
     _IGNORE="^.config$|^.cache$|^.local$|^.local/share$|^.local/state$|^$profile_dir$"
 
-    echo $_IGNORE >&2
+    log debug $_IGNORE
 
     _tmp_list=()
     # for _file in $(find $profile_dir -maxdepth 2); do
     for _file in $(find $profile_dir); do
         _rel_path="${_file/$profile_dir\//}"
-        echo "__________ $_file ($_rel_path)" >&2
+        log debug "__________ $_file ($_rel_path)"
 
         if $(echo "${_rel_path}" | grep -E -i "$STOW_IGNORE" >/dev/null 2>&1); then
-            echo "---($_rel_path)" >&2
+            log debug "---($_rel_path)"
             continue
         fi
 
         if $(echo "${_rel_path}" | grep -E -i "$_IGNORE" >/dev/null 2>&1); then
-            echo "--($_rel_path)" >&2
+            log debug "--($_rel_path)"
             continue
         fi
         _tmp_list+=("${_rel_path}")
     done
 
     for _f in ${_tmp_list[@]}; do
-        echo "==$_f" >&2
+        log debug "==$_f"
         for _d in ${_tmp_list[@]}; do
             if [[ "$_f" == *"$_d"* ]] && [[ "$_f" != "$_d" ]]; then
-                echo "It's there. $_f $_d" >&2
+                log debug "It's there. $_f $_d"
                 _f=""
             fi
         done
 
         if [ ! -z $_f ]; then
-            echo "+pass+ $_f" >&2
+            log debug "+pass+ $_f"
             _files+=("${_f}")
         fi
     done
 
-    echo "'''''''''''''' ${_files[*]}" >&2
+    log debug "'''''''''''''' ${_files[*]}"
     IFS="" echo -n "${_files[@]}"
 }
 
@@ -252,12 +254,12 @@ install() {
     local _files=$2[@]
     log info "Installing dotfiles from '$profile_dir'."
     for _f in ${!_files}; do
-        echo ""
-        echo "[link] $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f"
+        log debug ""
+        log debug "[link] $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f"
         _link $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f
-        echo ""
+        log debug ""
     done
-    echo "install done!!!"
+    log debug "install done!!!"
 }
 
 uninstall() {
@@ -267,10 +269,10 @@ uninstall() {
     # check _files exist?
     # unlink _files
     for _f in ${!_files}; do
-        echo ""
-        echo "[unlink] $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f"
+        log debug ""
+        log debug "[unlink] $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f"
         # _link $STOW_DIR/$_profile/$_f $STOW_TARGET/$_f
-        echo ""
+        log debug ""
     done
 
     # check dir empty
@@ -351,7 +353,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
-echo "--------------------------------------------------"
+log debug "--------------------------------------------------"
 
 printf "stow dir         : %s\n" "${STOW_DIR}"
 printf "stow target      : %s\n" "${STOW_TARGET}"
@@ -362,7 +364,7 @@ printf "install          : %s\n" "${STOW_INSTALL}"
 printf "restow           : %s\n" "${STOW_RESTOW}"
 printf "no-folding       : %s\n" "${STOW_NO_FOLDING}"
 
-echo "--------------------------------------------------"
+log debug "--------------------------------------------------"
 
 exit_if_invalid_directory_name "${STOW_DIR}"
 
@@ -374,11 +376,11 @@ for _p in ${STOW_PROFILE[@]}; do
     exit_if_profile_directories_contain_invalid_characters "${STOW_DIR}/${_p}"
 done
 
-echo "--------------------------------------------------"
+log debug "--------------------------------------------------"
 
 stow_delete() {
     if [ ! $# -gt 0 ]; then
-        echo "error"
+        log error "error"
         return
     fi
 
@@ -389,18 +391,18 @@ stow_delete() {
     fi
 
     for _d in $@; do
-        echo "list $_li"
+        log debug "list $_li"
         _list=$($_list_func "$STOW_DIR/$_li")
 
-        echo "delete $_li"
-        echo "list: ${_list[*]}"
+        log debug "delete $_li"
+        log debug "list: ${_list[*]}"
         # uninstall $_li _list
     done
 }
 
 stow_install() {
     if [ ! $# -gt 0 ]; then
-        echo "error"
+        log error "error"
         return
     fi
 
@@ -411,16 +413,16 @@ stow_install() {
     fi
 
     for _li in $@; do
-        echo "list $_li"
+        log debug "list $_li"
         _list=$($_list_func "$STOW_DIR/$_li")
 
-        echo "install $_li"
-        echo "list: ${_list[*]}"
+        log debug "install $_li"
+        log debug "list: ${_list[*]}"
         install $_li _list
     done
 }
 
-echo "[proc] stow del"
+log debug "[proc] stow del"
 if $STOW_DELETE; then
     if [ ! -z ${STOW_DELETE_PROFILE} ]; then
         stow_delete ${STOW_DELETE_PROFILE[@]}
@@ -437,7 +439,7 @@ if $STOW_RESTOW; then
     fi
 fi
 
-echo "[proc] stow install"
+log debug "[proc] stow install"
 
 if $STOW_INSTALL || $STOW_RESTOW; then
     if [ ! -z ${STOW_PROFILE} ]; then
